@@ -1,0 +1,67 @@
+'use strict'
+const throat = require('throat')
+
+function makePutResources({doPutResource, doCheckResources, timeout = 300, concurrency = 100}) {
+  const putResource = throat(concurrency, doPutResource)
+  const uploadedResources = new Set()
+  const requestedResources = new Map()
+  let pendingResources = new Map()
+  let throttleTimer = false
+
+  return async function(resources = []) {
+    const promises = resources.map(resource => {
+      const hash = resource.hash && resource.hash.hash
+      if (!hash || uploadedResources.has(hash)) {
+        return Promise.resolve()
+      } else if (requestedResources.has(hash)) {
+        return Promise.resolve(requestedResources.get(hash))
+      } else {
+        const promise = new Promise((resolve, reject) => {
+          pendingResources.set(resource, {
+            resolve: result => {
+              requestedResources.delete(hash)
+              uploadedResources.add(hash)
+              return resolve(result)
+            },
+            reject: err => {
+              requestedResources.delete(hash)
+              return reject(err)
+            },
+          })
+        })
+        requestedResources.set(hash, promise)
+        return promise
+      }
+    }, [])
+    if (!throttleTimer) {
+      throttleTimer = true
+      setTimeout(() => {
+        putResources(pendingResources)
+        pendingResources = new Map()
+        throttleTimer = false
+      }, timeout)
+    }
+    return Promise.all(promises)
+  }
+
+  async function putResources(requests) {
+    try {
+      const resources = Array.from(requests.keys())
+      const presentedResources = await doCheckResources(resources)
+
+      for (const [index, presented] of presentedResources.entries()) {
+        const resource = resources[index]
+        const {resolve, reject} = requests.get(resource)
+        if (presented) {
+          resolve()
+        } else {
+          putResource(resource).then(resolve, reject)
+        }
+      }
+    } catch (err) {
+      requests.forEach(({reject}) => reject(err))
+    }
+  }
+}
+
+module.exports = makePutResources

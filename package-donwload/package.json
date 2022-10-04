@@ -1,0 +1,19 @@
+{
+  "name": "treinamentocp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "**/*.feature",
+    "cypress:open": "cypress open"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "cypress": "^10.7.0"
+  },
+  "dependencies": {
+    "@applitools/eyes-cypress": "^3.27.1"
+  }
+}
